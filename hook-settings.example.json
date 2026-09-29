@@ -1,0 +1,27 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python3 src/server.py)",
+      "Bash(python3 src/hook.py)",
+      "Bash(curl -s http://127.0.0.1:5066*)",
+      "Bash(launchctl:*)",
+      "Read(//path/to/laya-guard/**)"
+    ],
+    "deny": []
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/usr/bin/python3 /path/to/laya-guard/src/hook.py",
+            "timeout": 5,
+            "statusMessage": "Laya guard"
+          }
+        ]
+      }
+    ]
+  }
+}

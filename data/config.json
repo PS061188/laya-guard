@@ -1,0 +1,8 @@
+{
+  "mode": "ask-only",
+  "ask_p": 1.01,
+  "deny_p": 0.85,
+  "ask_blast": 1.5,
+  "deny_blast": 1.0,
+  "note": "25 Sep 2026: the history replay showed the Laya layer would pause 37% of real commands (its score rises with command length, not danger), so ask_p is set above 1 - only the agent-guard regex floor triggers (3.6% pause rate on real traffic). Laya scores are still logged for recalibration. mode: ask-only | enforce"
+}

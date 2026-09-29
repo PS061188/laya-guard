@@ -1,0 +1,9 @@
+data/history_*
+data/real_labels.jsonl
+data/log.jsonl
+data/*.log
+data/finetuned/
+data/finetune_results*.json
+data/baseline_tfidf.json
+.env
+__pycache__/

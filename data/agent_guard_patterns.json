@@ -1,0 +1,85 @@
+{
+  "source": "vandith1/agent-guard guard-command.sh, MIT, matched case-insensitively",
+  "patterns": [
+    {
+      "label": "discard all local changes (git reset --hard)",
+      "ere": "git[[:space:]]+reset[[:space:]]+[^;&|]*--hard",
+      "python_regex": "git\\s+reset\\s+[^;&|]*--hard"
+    },
+    {
+      "label": "recursive or forced delete (rm -rf)",
+      "ere": "(^|[[:space:];&|(`])rm[[:space:]]+(-[^[:space:]]+[[:space:]]+)*-[[:alpha:]]*[rf]",
+      "python_regex": "(^|[\\s;&|(`])rm\\s+(-[^\\s]+\\s+)*-[a-zA-Z]*[rf]"
+    },
+    {
+      "label": "delete untracked files (git clean -f/-x)",
+      "ere": "git[[:space:]]+clean[[:space:]]+[^;&|]*(-[[:alpha:]]*[fx]|--force)",
+      "python_regex": "git\\s+clean\\s+[^;&|]*(-[a-zA-Z]*[fx]|--force)"
+    },
+    {
+      "label": "discard working tree (git checkout/restore .)",
+      "ere": "git[[:space:]]+(checkout|restore)[[:space:]]+(--[[:space:]]+)?\\.([[:space:]]|$)",
+      "python_regex": "git\\s+(checkout|restore)\\s+(--\\s+)?\\.(\\s|$)"
+    },
+    {
+      "label": "rewrite history (git filter-branch/filter-repo)",
+      "ere": "git[[:space:]]+filter-(branch|repo)",
+      "python_regex": "git\\s+filter-(branch|repo)"
+    },
+    {
+      "label": "force-push to a shared branch",
+      "ere": "git[[:space:]]+push[^;&|]*(-f|--force)[^;&|]*[[:space:]:](main|master|production)([[:space:]]|$)",
+      "python_regex": "git\\s+push[^;&|]*(-f|--force)[^;&|]*[\\s:](main|master|production)(\\s|$)"
+    },
+    {
+      "label": "drop a database object",
+      "ere": "drop[[:space:]]+(table|database|schema|index)([[:space:]]|$)",
+      "python_regex": "drop\\s+(table|database|schema|index)(\\s|$)"
+    },
+    {
+      "label": "truncate a table",
+      "ere": "truncate[[:space:]]+(table[[:space:]]+)?[\"`[:alnum:]_]",
+      "python_regex": "truncate\\s+(table\\s+)?[\"`a-zA-Z0-9_]"
+    },
+    {
+      "label": "wipe a datastore (flushall/flushdb)",
+      "ere": "(^|[[:space:]])flush(all|db)([[:space:]]|$)",
+      "python_regex": "(^|\\s)flush(all|db)(\\s|$)"
+    },
+    {
+      "label": "delete cloud resources (aws delete/terminate)",
+      "ere": "aws[[:space:]]+[^;&|]*(delete-|terminate-)",
+      "python_regex": "aws\\s+[^;&|]*(delete-|terminate-)"
+    },
+    {
+      "label": "delete cluster resources (kubectl delete)",
+      "ere": "kubectl[[:space:]]+delete([[:space:]]|$)",
+      "python_regex": "kubectl\\s+delete(\\s|$)"
+    },
+    {
+      "label": "destroy infrastructure (terraform destroy)",
+      "ere": "terraform[[:space:]]+destroy",
+      "python_regex": "terraform\\s+destroy"
+    },
+    {
+      "label": "prune docker state",
+      "ere": "docker[[:space:]]+(system|image|container|volume|network)[[:space:]]+prune",
+      "python_regex": "docker\\s+(system|image|container|volume|network)\\s+prune"
+    },
+    {
+      "label": "world-writable permissions (chmod 777)",
+      "ere": "chmod[[:space:]]+[^;&|]*(777|a\\+rwx)",
+      "python_regex": "chmod\\s+[^;&|]*(777|a\\+rwx)"
+    },
+    {
+      "label": "pipe a download straight into a shell",
+      "ere": "(curl|wget)[^;&|]*\\|[[:space:]]*(sudo[[:space:]]+)?[a-z]*sh([[:space:]]|$)",
+      "python_regex": "(curl|wget)[^;&|]*\\|\\s*(sudo\\s+)?[a-z]*sh(\\s|$)"
+    },
+    {
+      "label": "raw write to a block device",
+      "ere": "(>|of=)[[:space:]]*/dev/(sd|nvme|hd|disk|vd)",
+      "python_regex": "(>|of=)\\s*/dev/(sd|nvme|hd|disk|vd)"
+    }
+  ]
+}
