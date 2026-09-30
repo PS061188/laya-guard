@@ -95,6 +95,19 @@ def by_length(cmds, scores, labels, t):
     return rows
 
 
+def epoch_metrics(tag, scores, labels):
+    """Threshold-free and fixed-threshold (0.5) metrics for one epoch. Reporting only; model selection uses val AUROC."""
+    y = np.array(labels, dtype=float)
+    s = np.array(scores, dtype=float)
+    pred = s >= 0.5
+    loss = float(-np.mean(y * np.log(np.clip(s, 1e-6, 1)) + (1 - y) * np.log(np.clip(1 - s, 1e-6, 1))))
+    tpr = float(pred[y == 1].mean()) if (y == 1).any() else float("nan")
+    tnr = float((~pred[y == 0]).mean()) if (y == 0).any() else float("nan")
+    return {f"{tag}_loss": loss, f"{tag}_accuracy": float((pred == (y == 1)).mean()),
+            f"{tag}_balanced_accuracy": (tpr + tnr) / 2, f"{tag}_recall": tpr, f"{tag}_false_alarm_rate": 1 - tnr,
+            f"{tag}_auroc": auroc(list(s), list(y == 1))}
+
+
 # ---------------- data ----------------
 lab = [json.loads(l) for l in open(DATA / "commands.jsonl")]
 lab_lbl = lambda r: None if r["label"] == "ambiguous" else r["label"] == "destructive"
@@ -166,8 +179,10 @@ if UNFREEZE:
         for p_ in layer.parameters():
             p_.requires_grad = True
             enc_params.append(p_)
-if UNFREEZE > 8:  # full fine-tuning: recompute activations instead of storing them, or the Mac swaps
-    model.encoder.gradient_checkpointing_enable()
+if UNFREEZE > 8:  # full fine-tuning: recompute activations instead of storing them, or the Mac swaps.
+    # use_reentrant=False is required: with the default (reentrant) checkpointing and frozen embeddings,
+    # no checkpointed input requires grad, so every encoder layer silently gets no gradient at all.
+    model.encoder.gradient_checkpointing_enable(gradient_checkpointing_kwargs={"use_reentrant": False})
 enc_ids = {id(p_) for p_ in enc_params}
 head_params = [p_ for p_ in model.parameters() if p_.requires_grad and id(p_) not in enc_ids]
 opt = torch.optim.AdamW([{"params": head_params, "lr": LR}] + ([{"params": enc_params, "lr": ENC_LR}] if enc_params else []),
@@ -177,6 +192,14 @@ steps = EPOCHS * ((len(fit_items) + BS - 1) // BS)
 sched = torch.optim.lr_scheduler.LambdaLR(opt, lambda s, steps=steps: min(1.0, (s + 1) / (0.1 * steps)) * max(0.0, 1 - s / steps))
 best, best_auc, log = None, -1, []
 t_train = time.time()
+# epoch 0 = the model as shipped, scored the same way as every later epoch (no temperature)
+e0 = {"epoch": 0, "train_loss": None, "minutes": 0.0}
+e0.update(epoch_metrics("val", score([r["command"] for r in val]), [r["destructive"] for r in val]))
+e0.update(epoch_metrics("lab_test", score([r["command"] for r in lab_test if r["label"] != "ambiguous"]), [r["label"] == "destructive" for r in lab_test if r["label"] != "ambiguous"]))
+e0.update(epoch_metrics("real_test", score([r["command"] for r in real_test]), [r["destructive"] for r in real_test]))
+e0["val_auroc"] = e0["val_auroc"]
+log.append(e0)
+print(e0, flush=True)
 for ep in range(EPOCHS):
     model.train()
     if not UNFREEZE:
@@ -197,10 +220,16 @@ for ep in range(EPOCHS):
         sched.step()
         total += loss.item() * len(batch)
     s_val = score([r["command"] for r in val])
-    auc = auroc(s_val, [r["destructive"] for r in val])
-    log.append({"epoch": ep + 1, "train_loss": total / len(fit_items), "val_auroc": auc,
-                "minutes": (time.time() - t_train) / 60})
-    print(log[-1], flush=True)
+    y_val = [r["destructive"] for r in val]
+    auc = auroc(s_val, y_val)
+    entry = {"epoch": ep + 1, "train_loss": total / len(fit_items), "val_auroc": auc,
+             "minutes": (time.time() - t_train) / 60}
+    entry.update(epoch_metrics("val", s_val, y_val))
+    lt_c, lt_y = [r["command"] for r in lab_test if r["label"] != "ambiguous"], [r["label"] == "destructive" for r in lab_test if r["label"] != "ambiguous"]
+    entry.update(epoch_metrics("lab_test", score(lt_c), lt_y))
+    entry.update(epoch_metrics("real_test", score([r["command"] for r in real_test]), [r["destructive"] for r in real_test]))
+    log.append(entry)
+    print(entry, flush=True)
     if auc > best_auc:
         best_auc, best = auc, {k: v.detach().to("cpu").clone() for k, v in model.state_dict().items()}
 model.load_state_dict(best)

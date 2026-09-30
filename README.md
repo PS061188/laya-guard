@@ -4,7 +4,7 @@ Code for a three-part blog series that tests [Laya](https://huggingface.co/conva
 
 - **Part 1: [Laya, explained](https://prachi-sharma.vercel.app/blog-how-laya-works.html).** How the model works, in pictures, and how it differs from Jev.
 - **Part 2: [Does Laya work outside the lab?](https://prachi-sharma.vercel.app/blog-coding-agent-guard-eval.html)** Four guards on 50 hand-labelled commands, then on 4,549 real ones.
-- **Part 3: [I trained Laya on my real commands](https://prachi-sharma.vercel.app/blog-laya-fine-tuning.html).** Three ways of fine-tuning, against a two-second word-counting classifier.
+- **Part 3: [Training Laya on my real commands](https://prachi-sharma.vercel.app/blog-laya-fine-tuning.html).** Three ways of fine-tuning with pass-by-pass metrics, a two-second word-counting classifier for comparison, and the gradient-checkpointing bug a reviewer caught.
 
 ## Results in one table
 
@@ -12,7 +12,8 @@ Code for a three-part blog series that tests [Laya](https://huggingface.co/conva
 |---|---|---|
 | Rules list alone ([agent-guard](https://github.com/vandith1/agent-guard) patterns) | 0% false alarms, 65% missed | 3.6% paused |
 | Rules + Laya as published | 5% false alarms, 15% missed | 36.7% paused (of 2,500) |
-| Rules + Laya, top 8 layers fine-tuned | 5% false alarms, 15% missed | 27.3% paused, 6 of 19 destructive missed (400-command test set) |
+| Rules + Laya, head + top 8 layers fine-tuned | 5% false alarms, 15% missed | 26.2% paused, 7 of 19 destructive missed (400-command test set) |
+| Rules + Laya, every layer fine-tuned | 30% false alarms, 20% missed | 9.2% paused, 4 of 19 missed |
 | Rules + word-counting classifier (TF-IDF + logistic regression) | 90% false alarms, 0% missed | 26.5% paused, 2 of 19 missed |
 | Claude Opus 5 (low effort) | 0% false alarms, 0% missed | 3.0% paused (200-command sample) |
 
@@ -27,7 +28,8 @@ The real commands are my own Claude Code history. They stay private: this reposi
 | `src/eval.py`, `src/claude_guard.py`, `src/rescore.py`, `src/metrics.py` | Part 2 lab test: every guard on `data/commands.jsonl` (100 commands, tune/test split), thresholds fitted on tune, reported on test → `data/results.json`, `results.md`. |
 | `src/history_extract.py`, `src/history_score.py`, `src/history_claude.py` | Part 2 real test: extracts every Bash command from `~/.claude/projects/**/*.jsonl` (tokens redacted) and scores it with the same thresholds. |
 | `src/label_real.py` | Part 3: labels real commands with Claude Opus through the `claude` CLI (your Claude subscription, not the API). |
-| `src/finetune.py` | Part 3: fine-tunes Laya's `typed-decisions` checkpoint and evaluates before/after. `UNFREEZE=0` trains the head only, `UNFREEZE=8` the top 8 encoder layers, `UNFREEZE=28` everything. |
+| `src/finetune.py` | Part 3: fine-tunes Laya's `typed-decisions` checkpoint and evaluates before/after, logging loss, accuracy, recall, false-alarm rate and AUROC on validation, lab test and real test after every epoch. `UNFREEZE=0` trains the head only, `UNFREEZE=8` the top 8 encoder layers, `UNFREEZE=28` everything (uses non-reentrant gradient checkpointing; the reentrant default silently gives the encoder no gradients when embeddings are frozen). |
+| `src/epoch_figures.py` | The pass-by-pass training curves figure. |
 | `src/baseline_tfidf.py` | Part 3: the word-counting classifier on the same splits. |
 | `src/report.py`, `src/blog_figures.py`, `src/finetune_figures.py`, `src/explainer_figures.py` | Charts for the posts. |
 | `hook-settings.example.json`, `launchagent.example.plist` | How the hook and the server were wired on macOS; replace `/path/to/laya-guard`. |
@@ -40,7 +42,7 @@ python3 src/eval.py                 # lab test (Laya, Qwen, rules); Claude basel
 python3 src/history_extract.py      # your own Claude Code history -> data/history_commands.jsonl (private)
 python3 src/history_score.py
 python3 src/label_real.py           # needs the claude CLI logged in
-UNFREEZE=8 python3 src/finetune.py  # about 13 min training + 20 min scoring on an Apple-silicon Mac
+UNFREEZE=28 ENC_LR=1e-5 python3 src/finetune.py  # about 30 min training + 11 min scoring on an Apple-silicon Mac
 python3 src/baseline_tfidf.py
 ```
 
