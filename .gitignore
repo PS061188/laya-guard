@@ -7,3 +7,10 @@ data/finetune_results*.json
 data/baseline_tfidf.json
 .env
 __pycache__/
+data/vega_history.json
+data/vega_adapter-*/
+data/vega_adapter_results*.json
+data/vega_eval.log
+data/vega_history.log
+data/vega_adapter.log
+.venv-vega/

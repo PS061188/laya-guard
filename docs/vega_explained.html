@@ -1,0 +1,392 @@
+<title>Vega, Explained</title>
+<style>
+:root { --page:#f9f9f7; --surface:#fcfcfb; --ink:#0b0b0b; --ink2:#52514e; --muted:#898781; --grid:#e1e0d9; --axis:#c3c2b7;
+  --s1:#2a78d6; --s2:#eb6834; --s3:#1baf7a; --border:rgba(11,11,11,0.10); color-scheme: light; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --page:#0d0d0d; --surface:#1a1a19; --ink:#ffffff; --ink2:#c3c2b7;
+  --muted:#898781; --grid:#2c2c2a; --axis:#383835; --s1:#3987e5; --s2:#d95926; --s3:#199e70; --border:rgba(255,255,255,0.10); color-scheme: dark; } }
+:root[data-theme="dark"] { --page:#0d0d0d; --surface:#1a1a19; --ink:#ffffff; --ink2:#c3c2b7; --muted:#898781; --grid:#2c2c2a; --axis:#383835;
+  --s1:#3987e5; --s2:#d95926; --s3:#199e70; --border:rgba(255,255,255,0.10); color-scheme: dark; }
+* { box-sizing: border-box; }
+body { margin:0; padding-block:36px 72px; padding-inline:20px; background:var(--page); color:var(--ink);
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif; font-size:15px; line-height:1.5; }
+main { max-width: 900px; margin-inline:auto; }
+h1 { font-size:30px; line-height:1.15; margin:0 0 6px; text-wrap:balance; }
+h2 { font-size:19px; margin:40px 0 6px; text-wrap:balance; }
+p { max-width:66ch; }
+.sub { color:var(--ink2); margin:0 0 24px; max-width:64ch; }
+figure { margin:0; }
+figcaption { color:var(--ink2); font-size:13px; max-width:70ch; margin:8px 0 0; }
+.card { background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:16px 16px 12px; }
+svg { max-width:100%; height:auto; display:block; color:var(--ink); }
+svg text { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; fill:currentColor; }
+.t12 { font-size:12px; } .t11 { font-size:11px; fill:var(--ink2); } .t10 { font-size:10.5px; fill:var(--muted); }
+.box { fill:var(--surface); stroke:currentColor; stroke-width:1; }
+.box.trained { stroke:var(--s1); stroke-width:1.6; }
+.box.frozen { stroke:var(--axis); stroke-dasharray:4 3; }
+.edge { stroke:currentColor; stroke-width:1.2; fill:none; }
+.controls { display:flex; flex-wrap:wrap; gap:8px 10px; align-items:center; margin:0 0 12px; }
+button { font:inherit; font-size:13px; padding:7px 12px; border-radius:6px; border:1px solid var(--border); background:var(--surface); color:var(--ink); cursor:pointer; }
+button:hover { border-color:var(--ink2); }
+button:focus-visible { outline:2px solid var(--s1); outline-offset:2px; }
+button.on { border-color:var(--s1); box-shadow: inset 0 0 0 1px var(--s1); }
+button.run { background:var(--s1); color:#fff; border-color:var(--s1); }
+button.run:disabled { opacity:.5; cursor:default; }
+label.sw { display:inline-flex; gap:6px; align-items:center; font-size:13px; color:var(--ink2); margin-left:auto; cursor:pointer; }
+.readout { display:grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap:10px; margin-top:12px; }
+@media (max-width:640px) { .readout { grid-template-columns:1fr; } label.sw { margin-left:0; } }
+.ro { border:1px solid var(--border); border-radius:6px; padding:10px 12px; background:var(--page); }
+.ro .l { font-size:12px; color:var(--ink2); }
+.ro .v { font-size:20px; font-weight:600; font-variant-numeric: tabular-nums; margin-top:2px; }
+.ro .d { font-size:12px; color:var(--muted); }
+.bars { display:grid; gap:6px; margin-top:6px; }
+.bar { display:grid; grid-template-columns: 96px 1fr 44px; gap:8px; align-items:center; font-size:12px; }
+.bar .track { height:12px; background:var(--grid); border-radius:3px; overflow:hidden; }
+.bar .fill { height:100%; background:var(--s1); width:0; transition: width .3s; border-radius:3px; }
+.bar .n { text-align:right; font-variant-numeric: tabular-nums; color:var(--ink2); }
+.chip { display:inline-block; font-size:12px; padding:2px 8px; border-radius:10px; border:1px solid var(--border); color:var(--ink2); margin-right:6px; }
+.chip.good { border-color:var(--s3); color:var(--s3); } .chip.warn { border-color:var(--s2); color:var(--s2); }
+table { border-collapse:collapse; width:100%; font-size:13px; }
+th, td { text-align:left; padding:7px 9px; border-bottom:1px solid var(--grid); vertical-align:top; }
+thead th { color:var(--ink2); font-weight:600; }
+code { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size:12px; }
+.wrap { overflow-x:auto; }
+@media (prefers-reduced-motion: reduce) { .bar .fill { transition:none; } }
+</style>
+<main>
+<h1>Vega, explained</h1>
+<p class="sub">The same diagrams as the short page, with the explanation written out under each one: what the ball and the valleys are, which field of physics Vega borrows from, which other fields have fed machine learning, and how Vega compares with Laya on the same test.</p>
+
+<h2>The idea in one paragraph</h2>
+<p>Vega is a decision model: you give it a piece of text and a question whose answers are fixed in advance, and it returns one answer with a probability. Inside, the engine is a simulation of a ball on a landscape. Each possible answer is a valley. The command and question, read by a frozen language model, set where the ball starts, how deep and wide each valley is, and give it a small push. The engine then runs twelve steps of damped motion with friction, the same equations as a marble losing energy as it rolls, and the ball comes to rest in one valley. Which valley is the answer; how deep it sits and how fast it settled give the confidence and the abstain flag. A ball that stops nowhere near any valley raises the "unbound" flag. The physics is the mechanism, not the subject matter: nothing about the text is physical.</p>
+
+<h2>Where the landscape comes from</h2>
+<figure class="card">
+<svg viewBox="0 0 880 350" role="img" aria-label="Pipeline: the command and question go through a frozen language model, which is read at two internal layers and averaged into five vectors; small trained networks turn those into the start point, momentum, one well per answer and the friction; the engine integrates twelve steps and outputs the answer, its probability and two flags.">
+  <defs><marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="currentColor"/></marker></defs>
+  <!-- input -->
+  <rect x="12" y="110" width="150" height="92" rx="6" class="box"/>
+  <text x="87" y="134" text-anchor="middle" class="t12" font-weight="600">input</text>
+  <text x="87" y="154" text-anchor="middle" class="t11">command + cwd</text>
+  <text x="87" y="170" text-anchor="middle" class="t11">question text</text>
+  <text x="87" y="186" text-anchor="middle" class="t11">each answer option</text>
+  <!-- frozen LM -->
+  <rect x="200" y="96" width="170" height="120" rx="6" class="box frozen"/>
+  <text x="285" y="120" text-anchor="middle" class="t12" font-weight="600">Qwen3.5 (frozen)</text>
+  <text x="285" y="140" text-anchor="middle" class="t11">0.8B or 4B parameters</text>
+  <text x="285" y="156" text-anchor="middle" class="t11">never trained by Vega</text>
+  <text x="285" y="178" text-anchor="middle" class="t11">read at layers 13 and 19,</text>
+  <text x="285" y="194" text-anchor="middle" class="t11">forward pass stops there</text>
+  <line x1="162" y1="156" x2="198" y2="156" class="edge" marker-end="url(#ar)"/>
+  <!-- pooled vectors -->
+  <rect x="408" y="90" width="150" height="132" rx="6" class="box"/>
+  <text x="483" y="112" text-anchor="middle" class="t12" font-weight="600">5 pooled vectors</text>
+  <text x="483" y="132" text-anchor="middle" class="t11">x_state (situation)</text>
+  <text x="483" y="148" text-anchor="middle" class="t11">x_question</text>
+  <text x="483" y="164" text-anchor="middle" class="t11">x_option, one per answer</text>
+  <text x="483" y="180" text-anchor="middle" class="t11">x_last (end of prompt)</text>
+  <text x="483" y="200" text-anchor="middle" class="t10">token vectors averaged</text>
+  <line x1="370" y1="156" x2="406" y2="156" class="edge" marker-end="url(#ar)"/>
+  <!-- trained nets -->
+  <rect x="596" y="22" width="170" height="268" rx="6" class="box trained"/>
+  <text x="681" y="44" text-anchor="middle" class="t12" font-weight="600" data-plain="small trained networks" data-tech="engine projections (14M)">small trained networks</text>
+  <text x="681" y="60" text-anchor="middle" class="t10">the only part Vega trains</text>
+  <line x1="558" y1="156" x2="594" y2="156" class="edge" marker-end="url(#ar)"/>
+  <g class="t11">
+    <text x="610" y="90" data-plain="where the ball starts" data-tech="z₀ ∈ ℝ⁶⁴ (to_z0)">where the ball starts</text>
+    <text x="610" y="112" data-plain="its first push" data-tech="p₀, initial momentum (to_p0)">its first push</text>
+    <text x="610" y="134" data-plain="one valley per answer:" data-tech="one Gaussian well per option:">one valley per answer:</text>
+    <text x="622" y="150" data-plain="position, depth, width" data-tech="centre c_k, depth a_k, width σ_k">position, depth, width</text>
+    <text x="610" y="172" data-plain="friction, each step" data-tech="damping γ_t (probe net)">friction, each step</text>
+    <text x="610" y="194" data-plain="a small nudge, each step" data-tech="learned impulse (impulse net)">a small nudge, each step</text>
+    <text x="610" y="216" data-plain="the bowl around it all" data-tech="½κ‖z‖², fixed">the bowl around it all</text>
+    <text x="610" y="248" data-plain="rank-32 adapter + gate" data-tech="gated LoRA on 7 projections">rank-32 adapter + gate</text>
+    <text x="610" y="264" class="t10">(optional, trained on your data)</text>
+  </g>
+  <!-- engine -->
+  <rect x="804" y="96" width="64" height="120" rx="6" class="box"/>
+  <text x="836" y="124" text-anchor="middle" class="t12" font-weight="600">roll</text>
+  <text x="836" y="144" text-anchor="middle" class="t11">≤ 12</text>
+  <text x="836" y="160" text-anchor="middle" class="t11">steps</text>
+  <text x="836" y="184" text-anchor="middle" class="t10">no</text>
+  <text x="836" y="198" text-anchor="middle" class="t10">weights</text>
+  <line x1="766" y1="156" x2="802" y2="156" class="edge" marker-end="url(#ar)"/>
+  <!-- outputs along bottom -->
+  <path d="M836,218 V300 H70" class="edge" marker-end="url(#ar)"/>
+  <text x="440" y="322" text-anchor="middle" class="t11">out: the valley it rests in = answer · how deep and how fast it settled = probability · settled nowhere = "unbound" · low confidence = "abstain"</text>
+  <text x="440" y="340" text-anchor="middle" class="t10">figure 2 shows the roll</text>
+</svg>
+<figcaption>The dashed box is frozen: Vega pins its hash and refuses a changed one. The blue box holds every trained parameter (14.3M in the 0.8B, 30.9M in the 4B). The engine on the right has no weights; it only integrates.</figcaption>
+</figure>
+<p>"Reads the text" is a plain pooling step. The command, the question and each answer option are written into one prompt in a fixed format. The frozen language model runs forward only as far as its nineteenth layer (of 24 in the 0.8B); the language-modelling head that would generate words never executes. At layers 13 and 19 the token vectors are averaged over each span: the situation, the question, each option separately, and the last token of the prompt. Those five vectors are all the engine ever sees.</p>
+<p>The small trained networks take those vectors and produce the landscape. One network places the ball's start point and another its first push. A third reads each option's pooled vector and emits the centre, depth and width of that option's valley, so a label set the model has never seen still gets a valley per label. Two more are consulted at every step of the roll: one sets the friction, one adds a small learned nudge, both reading the trajectory so far. The bowl that stops the ball drifting away is fixed. Because the language model never changes, adapting Vega to your data means retraining only these small networks, or a 0.84M-parameter adapter on top of them, or fitting a separate head on the five vectors.</p>
+
+<h2>The roll</h2>
+<div class="card">
+<div class="controls" role="group" aria-label="Choose a situation">
+  <button type="button" id="p0" class="on">rm -rf build/</button>
+  <button type="button" id="p1">sed -i 's/DEBUG = True/False/' settings.py</button>
+  <button type="button" id="p2">"Add the dal to the pan and stir"</button>
+  <button type="button" id="run" class="run">Roll the ball</button>
+  <label class="sw"><input type="checkbox" id="tech"> technical names</label>
+</div>
+<figure>
+<svg id="land" viewBox="0 0 880 320" role="img" aria-label="A one-dimensional landscape with a bowl and three valleys labelled read only, writes files, deletes data. A ball starts where the text puts it and rolls with momentum and friction until it rests in one valley.">
+  <defs><marker id="ar2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="currentColor"/></marker></defs>
+  <path id="curve" d="" fill="none" stroke="currentColor" stroke-width="2"/>
+  <g id="wells"></g>
+  <line id="trail" x1="0" y1="0" x2="0" y2="0" stroke="var(--s1)" stroke-width="1" stroke-dasharray="3 3" opacity="0"/>
+  <circle id="ball" r="9" fill="var(--s1)" stroke="var(--surface)" stroke-width="2"/>
+  <g id="arrow" opacity="0"><line id="arrowl" x1="0" y1="0" x2="0" y2="0" stroke="var(--s2)" stroke-width="2" marker-end="url(#ar2)" style="color:var(--s2)"/></g>
+  <text id="ballLabel" class="t11" text-anchor="middle" data-plain="the ball" data-tech="particle z, momentum p">the ball</text>
+  <text x="12" y="20" class="t11" data-plain="ground height = how bad a resting place is" data-tech="U(z) = ½κ‖z‖² − Σ a_k·exp(−‖z−c_k‖²/2σ_k²)">ground height = how bad a resting place is</text>
+  <text x="868" y="300" text-anchor="end" class="t10" data-plain="the bowl keeps the ball from rolling away" data-tech="½κ‖z‖² grows away from the origin">the bowl keeps the ball from rolling away</text>
+  <text id="stepText" x="868" y="20" text-anchor="end" class="t11">step 0 of 12</text>
+</svg>
+<figcaption id="cap">Illustration in one dimension with hand-chosen valley shapes, so the three outcomes are visible. The real engine works in 64 dimensions, and the valley positions, depths and widths come from the text of each answer option.</figcaption>
+</figure>
+<div class="readout">
+  <div class="ro"><div class="l" data-plain="where it rests" data-tech="argmax well, calibrated softmax">where it rests</div><div class="v" id="ans">—</div>
+    <div class="bars" id="bars"></div></div>
+  <div class="ro"><div class="l" data-plain="how settled it is" data-tech="thermal features → temperature τ">how settled it is</div><div class="v" id="conf">—</div><div class="d" id="confd">speed left, depth, steps used set the confidence</div></div>
+  <div class="ro"><div class="l">flags</div><div class="v" id="flags" style="font-size:14px;line-height:2">—</div><div class="d" data-plain="abstain = not sure enough; unbound = stopped nowhere near a valley" data-tech="abstain: conf &lt; fitted floor; unbound: ‖z − c_nearest‖ &gt; threshold">abstain = not sure enough; unbound = stopped nowhere near a valley</div></div>
+</div>
+</div>
+
+<p style="margin-top:16px">What the roll gives you that a plain classifier does not: three quantities that fall out of the mechanics for free. How much speed is left and how far the ball sits from the valley floor say how settled the answer is, and Vega's calibration reads exactly those to set its confidence instead of trusting a number the network was trained to emit. The distance from the nearest valley centre says whether the question was out of its depth at all; past a fitted threshold the answer is marked unbound. And a stability condition from control theory, a Lyapunov term in the training loss, guarantees that friction always wins, so the ball settles instead of circling forever. In my own test these were the reason Vega 4B's probabilities came out more honest than Laya's.</p>
+
+<h2>Every word in the picture, in technical terms</h2>
+<div class="wrap"><table>
+<thead><tr><th>in the picture</th><th>technical object</th><th>what sets it</th></tr></thead>
+<tbody>
+<tr><td>the landscape</td><td>a 64-dimensional space the engine works in; nothing in it has a task meaning</td><td>fixed by the architecture</td></tr>
+<tr><td>the ball</td><td>a position vector z and a momentum vector p, both 64-dimensional</td><td>two small networks, from the pooled text vectors</td></tr>
+<tr><td>ground height</td><td>the potential energy U(z), one number per point</td><td>the formula under the toggle</td></tr>
+<tr><td>the bowl</td><td>the quadratic term ½κ‖z‖²</td><td>fixed; stops the ball drifting to infinity</td></tr>
+<tr><td>a valley</td><td>a Gaussian well, one per candidate answer, subtracted from U</td><td>a small network reads the option text and sets centre c_k, depth a_k, width σ_k</td></tr>
+<tr><td>gravity</td><td>the force −∇U at the ball's position, softly capped</td><td>computed every step</td></tr>
+<tr><td>rolling</td><td>up to 12 steps of damped Hamiltonian integration: momentum updated by the force, then position by the momentum (symplectic order)</td><td>stops early once the ball barely moves</td></tr>
+<tr><td>friction</td><td>a damping coefficient that shrinks the momentum each step</td><td>a small network, from the trajectory so far</td></tr>
+<tr><td>a nudge</td><td>a learned extra push each step</td><td>a small network, from the trajectory so far</td></tr>
+<tr><td>where it rests</td><td>the answer: the logit of each option is how deep that well is felt at the final position; a softmax gives probabilities</td><td></td></tr>
+<tr><td>how settled</td><td>kinetic energy left, distance from the valley floor, steps used, number of options; these set the softmax temperature</td><td>thermal calibration fitted on held-out data</td></tr>
+<tr><td>unbound</td><td>distance from the nearest well centre above a fitted threshold; an out-of-distribution signal</td><td>fitted on held-out data</td></tr>
+<tr><td>abstain</td><td>confidence below the floor for the chosen risk level</td><td>conformal calibration</td></tr>
+<tr><td>a score question</td><td>wells placed along a line in order, so an answer two steps off sits geometrically farther than one step off</td><td></td></tr>
+</tbody></table></div>
+<p style="margin-top:16px">Two things make this more than a metaphor. First, nothing about the text is physical: the 64 dimensions have no meaning, and the valleys are rebuilt from scratch for every question from the option text, which is why any label set works without retraining. Second, the only trained parts are the small networks that turn text features into valley positions, depths, widths, the start point, the friction and the nudge: 14M parameters in the 0.8B, 31M in the 4B. The integration itself has no parameters at all. That split, trained landscape and parameter-free motion, is what lets confidence and abstention be read off physical quantities instead of learned.</p>
+
+<h2>The field Vega belongs to</h2>
+<p>The field is usually called physics-informed or dynamics-based neural networks. The shared idea: instead of letting a network map input to output in one jump, you make it describe how a state moves over time, and you borrow the equations physicists use for motion so the movement behaves well.</p>
+<p><b>Neural ODEs (2018, Chen and others).</b> A normal deep network is a stack of discrete layers. A neural ODE replaces the stack with one small network that says "here is the velocity of the state right now", and an ODE solver integrates that velocity forward in time. Depth becomes continuous time. You get adaptive compute (the solver takes as many steps as the problem needs), constant memory, and the ability to model irregularly timed data such as medical records. Vega's "up to 12 steps of integration, stopping when the ball settles" is this idea with a fixed step budget.</p>
+<p><b>Hamiltonian neural networks (2019, Greydanus and others).</b> A plain neural ODE can learn any velocity field, including ones that leak or create energy out of nothing, so long simulations drift. A Hamiltonian network learns a single scalar function, the total energy, and derives the motion from it using Hamilton's equations: position changes according to the energy's slope in momentum, momentum changes according to the energy's slope in position. Anything integrated this way conserves energy and is reversible by construction. Trained on a pendulum or a two-body orbit, it stays on the right orbit for thousands of steps where a plain network wanders off. Vega's engine keeps position and momentum as separate quantities and updates momentum before position, the symplectic integration scheme these networks use.</p>
+<p><b>Lagrangian neural networks (2020, Cranmer and others).</b> Same goal, different starting point. Instead of energy as a function of position and momentum, you learn the Lagrangian (kinetic minus potential energy) as a function of position and velocity, and derive motion from the principle of least action. The practical gain is working in ordinary coordinates such as angles without converting to momenta first.</p>
+<p><b>Where Vega sits, and where it departs.</b> It learns a potential energy landscape: a bowl, so the ball cannot escape, minus one Gaussian well per candidate answer, with the wells' positions and depths produced from the text. It integrates with momentum, like a Hamiltonian system. Then it deliberately breaks the conservation rule: it adds learned friction so the ball loses energy and comes to rest. A pure Hamiltonian system never stops; a decision needs a stopping point. In physics terms it is a damped system, and the training's Lyapunov term is the control-theory guarantee that damping always wins.</p>
+<p><b>Why anyone does this.</b> Three things come free from the physics that a plain classifier has to learn from data: a built-in notion of how settled an answer is, a natural out-of-distribution signal (the ball stopped nowhere), and stability under long computation.</p>
+<p><b>Cousins you may meet.</b> Deep equilibrium models (2019) run a layer until its output stops changing, the same "settle" idea without the mechanics vocabulary. Physics-informed neural networks, PINNs (2019), go the other way: a network that must satisfy a known physical equation, used for fluid or heat simulation rather than classification. Diffusion models are the thermodynamic branch of the same family tree.</p>
+
+<h2>Other fields that have fed machine learning</h2>
+<ul>
+<li><b>Thermodynamics:</b> diffusion models, the engine behind today's image generators, copy a gas spreading out and run it in reverse (Sohl-Dickstein and others, 2015).</li>
+<li><b>Statistical physics:</b> Hopfield networks and modern energy-based models; Hopfield's 2024 Nobel Prize was for exactly this borrowing (Hopfield, 1982).</li>
+<li><b>Classical mechanics:</b> Hamiltonian and Lagrangian neural networks, neural ODEs; Vega sits in this family.</li>
+<li><b>Control theory:</b> Mamba and state-space models came out of signal processing and control; Vega's Lyapunov term is from the same shelf.</li>
+<li><b>Electrostatics:</b> Poisson flow generative models treat data points as electric charges.</li>
+<li><b>Neuroscience:</b> liquid neural networks modelled on a worm's nervous system, spiking networks, and memory layers built around "surprise".</li>
+<li><b>Statistics and forecasting:</b> Laya and Jev train with proper scoring rules, the Brier-score idea weather forecasters use to keep probabilities honest.</li>
+<li><b>Metallurgy:</b> simulated annealing, still used for tuning, copies the slow cooling of metal.</li>
+</ul>
+<p>Each time one of these appears, two fields that developed their tools separately turn out to have been describing the same thing. A physicist's "settle into the lowest energy state" is a machine learner's "choose the most likely answer", and once you see it, the physicist's two hundred years of theorems about settling become yours to use.</p>
+
+<h2>Laya and Vega side by side</h2>
+<p>Laya (September 2026, Convai Innovations) is a 421M-parameter decision model: ModernBERT-large reads the text and a two-layer head with an option scorer decides, trained with reinforcement learning against proper scoring rules. Every parameter is trained. Vega (October 2026, same author) keeps the reader frozen and trains only the engine. Vega 0.8B reads with Qwen3.5-0.8B, an 800-million-parameter language model, and decides with a 14M-parameter engine (57 MB); Vega 4B reads with Qwen3.5-4B and decides with a 31M-parameter engine (124 MB). Same code, same questions, same answer format. The author keeps the 0.8B as the default because it is faster and smaller, and says the 4B is the better model on nearly everything he measured. In my test the bigger reader mattered more than the engine: zero-shot, the 4B went from 82% to 95% balanced accuracy on the short set and from AUROC 0.63 to 0.82 on my labelled real commands, at four times the latency.</p>
+<figure class="card">
+<svg viewBox="0 0 880 400" role="img" aria-label="Two pipelines. Laya: text goes into ModernBERT-large, fully fine-tuned, then a trained decision head, and out comes a probability. Vega: text goes into a frozen Qwen3.5, then five pooled vectors, then a small trained engine that rolls a ball, and out come a probability, a conformal set, an abstain flag and an unbound flag. Adapting Laya means retraining all 421M parameters; adapting Vega means fitting a head or a 0.84M adapter.">
+  <defs><marker id="ar3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="currentColor"/></marker></defs>
+  <!-- legend -->
+  <rect x="12" y="12" width="26" height="12" rx="3" class="box trained"/><text x="46" y="22" class="t11">trained by the model's author</text>
+  <rect x="250" y="12" width="26" height="12" rx="3" class="box frozen"/><text x="284" y="22" class="t11">frozen, never trained</text>
+  <!-- column titles -->
+  <text x="12" y="62" class="t12" font-weight="600" fill="var(--s2)" style="fill:var(--s2)">Laya · Sep 2026</text>
+  <text x="12" y="222" class="t12" font-weight="600" style="fill:var(--s1)">Vega · Oct 2026</text>
+  <!-- Laya row -->
+  <rect x="12" y="80" width="110" height="60" rx="6" class="box"/>
+  <text x="67" y="106" text-anchor="middle" class="t12">text</text><text x="67" y="124" text-anchor="middle" class="t11">command + question</text>
+  <line x1="122" y1="110" x2="158" y2="110" class="edge" marker-end="url(#ar3)"/>
+  <rect x="160" y="72" width="220" height="76" rx="6" class="box trained"/>
+  <text x="270" y="96" text-anchor="middle" class="t12" font-weight="600">ModernBERT-large</text>
+  <text x="270" y="114" text-anchor="middle" class="t11">395M parameters, every layer fine-tuned</text>
+  <text x="270" y="130" text-anchor="middle" class="t11">reads and represents the text</text>
+  <line x1="380" y1="110" x2="416" y2="110" class="edge" marker-end="url(#ar3)"/>
+  <rect x="418" y="72" width="220" height="76" rx="6" class="box trained"/>
+  <text x="528" y="96" text-anchor="middle" class="t12" font-weight="600">decision head</text>
+  <text x="528" y="114" text-anchor="middle" class="t11">2 layers + option scorer, 26M</text>
+  <text x="528" y="130" text-anchor="middle" class="t11">trained with RL on proper scoring rules</text>
+  <line x1="638" y1="110" x2="674" y2="110" class="edge" marker-end="url(#ar3)"/>
+  <rect x="676" y="80" width="192" height="60" rx="6" class="box"/>
+  <text x="772" y="106" text-anchor="middle" class="t12">answer + probability</text>
+  <text x="772" y="124" text-anchor="middle" class="t11">nothing else</text>
+  <text x="12" y="172" class="t11">to adapt to your data: retrain all 421M parameters (25 min on a Mac for 800 commands)</text>
+  <!-- Vega row -->
+  <rect x="12" y="240" width="110" height="60" rx="6" class="box"/>
+  <text x="67" y="266" text-anchor="middle" class="t12">text</text><text x="67" y="284" text-anchor="middle" class="t11">command + question</text>
+  <line x1="122" y1="270" x2="158" y2="270" class="edge" marker-end="url(#ar3)"/>
+  <rect x="160" y="232" width="146" height="76" rx="6" class="box frozen"/>
+  <text x="233" y="256" text-anchor="middle" class="t12" font-weight="600">Qwen3.5</text>
+  <text x="233" y="274" text-anchor="middle" class="t11">0.8B or 4B, frozen</text>
+  <text x="233" y="290" text-anchor="middle" class="t11">read at 2 layers, averaged</text>
+  <line x1="306" y1="270" x2="356" y2="270" class="edge" marker-end="url(#ar3)"/>
+  <text x="331" y="258" text-anchor="middle" class="t10">5 vectors</text>
+  <rect x="358" y="224" width="280" height="92" rx="6" class="box trained"/>
+  <text x="498" y="246" text-anchor="middle" class="t12" font-weight="600">engine, 14M (0.8B) or 31M (4B)</text>
+  <text x="498" y="264" text-anchor="middle" class="t11">builds one valley per answer, sets start, friction</text>
+  <text x="498" y="280" text-anchor="middle" class="t11">then rolls a ball for ≤ 12 steps (no weights)</text>
+  <text x="498" y="300" text-anchor="middle" class="t11">confidence read off how the ball settled</text>
+  <line x1="638" y1="270" x2="674" y2="270" class="edge" marker-end="url(#ar3)"/>
+  <rect x="676" y="224" width="192" height="92" rx="6" class="box"/>
+  <text x="772" y="246" text-anchor="middle" class="t12">answer + probability</text>
+  <text x="772" y="264" text-anchor="middle" class="t11">+ conformal answer set</text>
+  <text x="772" y="280" text-anchor="middle" class="t11">+ abstain flag</text>
+  <text x="772" y="296" text-anchor="middle" class="t11">+ unbound (out of distribution)</text>
+  <text x="12" y="344" class="t11">to adapt to your data: fit a head on the frozen features (4 min for 800 commands), or train a 0.84M gated adapter on cached features (24 s)</text>
+  <text x="12" y="364" class="t11">context: Laya 8k tokens · Vega 73k tokens, long input read once for all questions · Vega also takes images through the same path</text>
+  <text x="12" y="388" class="t10">Parameter counts from the model cards: Laya 421M total (ModernBERT-large 395M + head); Vega engine 14,342,512 / 30,879,088.</text>
+</svg>
+<figcaption>The difference that matters: Laya learns by changing how it reads; Vega never touches the reader and learns only how to shape the landscape the ball rolls on.</figcaption>
+</figure>
+
+<figure class="card" style="margin-top:14px">
+<div class="legend" style="display:flex;gap:18px;font-size:13px;color:var(--ink2);margin:0 0 6px"><span><i style="display:inline-block;width:12px;height:12px;border-radius:2px;background:var(--s2);margin-right:6px;vertical-align:-1px"></i>Laya typed-decisions</span><span><i style="display:inline-block;width:12px;height:12px;border-radius:2px;background:var(--s1);margin-right:6px;vertical-align:-1px"></i>Vega 4B</span><span>lower is better on every row</span></div>
+<svg viewBox="0 0 880 330" role="img" aria-label="Paired bars, Laya against Vega 4B, lower is better: harmless commands wrongly stopped on the short set 10 of 20 against 1 of 20; destructive let through 1 of 20 against 1 of 20; real commands stopped per 100, 93 against 26; destructive missed of 19 after training at the same stop rate, 5 against 2 for Vega's fitted head; seconds per short command 0.1 against 1.4.">
+  <g class="t12">
+    <text x="300" y="38" text-anchor="end">short set: harmless wrongly stopped, of 20</text>
+    <rect x="312" y="22" width="420" height="10" rx="3" fill="var(--s2)"/><text x="740" y="31" class="t11">10</text>
+    <rect x="312" y="36" width="42" height="10" rx="3" fill="var(--s1)"/><text x="362" y="45" class="t11">1</text>
+
+    <text x="300" y="96" text-anchor="end">short set: destructive let through, of 20</text>
+    <rect x="312" y="80" width="42" height="10" rx="3" fill="var(--s2)"/><text x="362" y="89" class="t11">1</text>
+    <rect x="312" y="94" width="42" height="10" rx="3" fill="var(--s1)"/><text x="362" y="103" class="t11">1</text>
+
+    <text x="300" y="154" text-anchor="end">real commands stopped, per 100 (unlabelled)</text>
+    <rect x="312" y="138" width="420" height="10" rx="3" fill="var(--s2)"/><text x="740" y="147" class="t11">93 (37 behind rules)</text>
+    <rect x="312" y="152" width="117" height="10" rx="3" fill="var(--s1)"/><text x="437" y="161" class="t11">26 (16 behind rules)</text>
+
+    <text x="300" y="212" text-anchor="end">trained, at 9 stops per 100: destructive missed, of 19</text>
+    <rect x="312" y="196" width="420" height="10" rx="3" fill="var(--s2)"/><text x="740" y="205" class="t11">5 (every layer retrained)</text>
+    <rect x="312" y="210" width="168" height="10" rx="3" fill="var(--s1)"/><text x="488" y="219" class="t11">2 (Vega 0.8B, fitted head)</text>
+
+    <text x="300" y="270" text-anchor="end">seconds per short command on a Mac</text>
+    <rect x="312" y="254" width="30" height="10" rx="3" fill="var(--s2)"/><text x="350" y="263" class="t11">0.1</text>
+    <rect x="312" y="268" width="420" height="10" rx="3" fill="var(--s1)"/><text x="740" y="277" class="t11">1.4 (3.6 on real commands)</text>
+  </g>
+  <text x="312" y="312" class="t10">each row on its own scale · 20 per class on the short set, 19 destructive in the real set: one command = five points</text>
+</svg>
+<figcaption>Vega 4B against Laya typed-decisions on the same commands. The fourth row uses Vega 0.8B, whose fitted head had the best ranking; the 4B's head missed 3. Zero-shot on the labelled real commands, Laya let none through only because it stopped 92 of every 100.</figcaption>
+</figure>
+
+<h2>Best numbers of each, on the same commands</h2>
+<p>Best configuration of each model, lower is better in every cell. "Dangerous missed" counts destructive commands the guard let through; "harmless paused" counts harmless commands it wrongly stopped.</p>
+<div class="wrap"><table>
+<thead><tr><th>short terminal command set, 50 held out</th><th class="num">dangerous missed</th><th class="num">harmless paused</th></tr></thead>
+<tbody>
+<tr><td>Laya best: regex floor + Laya typed</td><td>3 of 20</td><td>1 of 20</td></tr>
+<tr><td>Vega best: Vega 4B alone</td><td>1 of 20</td><td>1 of 20</td></tr>
+<tr><td>Claude Opus 5, low effort</td><td>0 of 20</td><td>0 of 20</td></tr>
+</tbody></table></div>
+<div class="wrap" style="margin-top:12px"><table>
+<thead><tr><th>my real commands, nothing trained</th><th class="num">dangerous missed</th><th class="num">harmless paused</th></tr></thead>
+<tbody>
+<tr><td>Laya best: regex floor + Laya typed</td><td>not labelled for Laya</td><td>37 of every 100</td></tr>
+<tr><td>Vega best: Vega 4B alone, on the 400 labelled</td><td>6 of 19</td><td>86 of 381 (23 of every 100)</td></tr>
+<tr><td>Claude Opus 5, low effort</td><td>0 of the 5 Claude Code had denied</td><td>3 of every 100</td></tr>
+</tbody></table></div>
+<div class="wrap" style="margin-top:12px"><table>
+<thead><tr><th>after training on 800 labelled real commands; 400 held out, 19 dangerous, 381 harmless</th><th class="num">dangerous missed</th><th class="num">harmless paused</th></tr></thead>
+<tbody>
+<tr><td>Laya best: every layer fine-tuned, with rules</td><td>4 of 19</td><td>31 of 381</td></tr>
+<tr><td>Vega best by cut-off: 0.8B gated adapter at 0.1</td><td>6 of 19</td><td>42 of 381</td></tr>
+<tr><td>Vega best by ranking: 0.8B fitted head, at Laya's pause rate</td><td>2 of 19</td><td>20 of 381</td></tr>
+</tbody></table></div>
+<p>The last row is the one to read carefully. Vega's fitted head catches the most dangerous commands for the same number of harmless pauses, but it only hits those numbers if you hand it the cut-off; it cannot pick one itself. Laya's fine-tune and Vega's adapter can. Twenty dangerous commands per set means one command moves a number by five points, so treat "2 against 4 missed" as a lead, not a proof.</p>
+<p>Where Vega is worse than Laya: asked what a command mainly does, it labels commands like cat and ls as "sends data out", so the reason shown with a stop would be wrong more often; and it is 4 to nearly 40 times slower on a Mac. The verdict for the guard in front of my coding agent is unchanged: rules on, local model off, hosted model as the soft layer. Full numbers are on the "Vega vs Laya" report page.</p>
+
+<p class="sub" style="margin-top:14px">Sources: Nandakishor M, "Vega: a decision model that rolls a ball down a hill", 10 Oct 2026, and the vegaml source. Chen, Rubanova, Bettencourt, Duvenaud, "Neural Ordinary Differential Equations", NeurIPS 2018. Greydanus, Dzamba, Yosinski, "Hamiltonian Neural Networks", NeurIPS 2019. Cranmer and others, "Lagrangian Neural Networks", ICLR 2020 workshop. Hopfield, PNAS 1982. Sohl-Dickstein and others, "Deep Unsupervised Learning using Nonequilibrium Thermodynamics", ICML 2015. The animation reproduces the shape of the dynamics, with its own constants.</p>
+</main>
+<script>
+(function(){
+  const W=880,H=320,L=40,R=840,T=44,B=236;
+  const xmin=-4,xmax=4,sigma=0.62;let k=0.12;
+  const centres=[-2.4,1.2,2.7], names=["read only","writes files","deletes data"];
+  const presets=[
+    {a:[0.25,0.6,2.6], k:0.12, x0:1.3, p0:0.9, cap:"The text says delete. The deletes-data valley is deep, the ball starts near it and rolls in. Confident, no flags."},
+    {a:[0.3,0.9,0.85], k:0.12, x0:1.9, p0:-0.4, cap:"An in-place edit of a config file. Two valleys of similar depth; the ball rests in one of them but not deeply, so the probability is close to even and the engine abstains."},
+    {a:[0.12,0.1,0.12], k:0.2, x0:-0.2, p0:0.5, cap:"A cooking instruction has nothing to do with any answer. Every valley is shallow, the bowl wins, and the ball stops between valleys: unbound, an out-of-distribution signal."}
+  ];
+  let cur=0, anim=null;
+  const $=id=>document.getElementById(id);
+  const sx=x=>L+(x-xmin)/(xmax-xmin)*(R-L);
+  function U(x,a){let u=0.5*k*x*x;for(let i=0;i<3;i++)u-=a[i]*Math.exp(-((x-centres[i])**2)/(2*sigma*sigma));return u;}
+  function F(x,a){let f=-k*x;for(let i=0;i<3;i++)f-=a[i]*(x-centres[i])/(sigma*sigma)*Math.exp(-((x-centres[i])**2)/(2*sigma*sigma));return Math.max(-6,Math.min(6,f));}
+  let ymin,ymax;const sy=u=>B-(u-ymin)/(ymax-ymin)*(B-T);
+  function draw(a){
+    const pts=[];ymin=1e9;ymax=-1e9;
+    for(let i=0;i<=220;i++){const x=xmin+(xmax-xmin)*i/220,u=U(x,a);pts.push([x,u]);ymin=Math.min(ymin,u);ymax=Math.max(ymax,u);}
+    ymin-=0.25;ymax+=0.35;
+    $("curve").setAttribute("d","M"+pts.map(([x,u])=>sx(x).toFixed(1)+","+sy(u).toFixed(1)).join(" L"));
+    const g=$("wells");g.innerHTML="";
+    centres.forEach((c,i)=>{
+      const t=document.createElementNS("http://www.w3.org/2000/svg","text");
+      t.setAttribute("x",sx(c));t.setAttribute("y",sy(U(c,a))+24);t.setAttribute("text-anchor","middle");t.setAttribute("class","t11");
+      t.textContent=names[i];g.appendChild(t);
+      const t2=document.createElementNS("http://www.w3.org/2000/svg","text");
+      t2.setAttribute("x",sx(c));t2.setAttribute("y",sy(U(c,a))+38);t2.setAttribute("text-anchor","middle");t2.setAttribute("class","t10");
+      t2.setAttribute("data-plain","depth "+a[i].toFixed(1));t2.setAttribute("data-tech","a_"+(i+1)+" = "+a[i].toFixed(1)+", c = "+c);
+      t2.textContent=$("tech").checked?t2.dataset.tech:t2.dataset.plain;g.appendChild(t2);
+    });
+  }
+  function place(x,a){$("ball").setAttribute("cx",sx(x));$("ball").setAttribute("cy",sy(U(x,a))-9);$("ballLabel").setAttribute("x",sx(x));$("ballLabel").setAttribute("y",sy(U(x,a))-22);}
+  function simulate(p){
+    const a=p.a;let x=p.x0,m=p.p0;const dt=0.42;const steps=[{x,m}];
+    for(let s=0;s<12;s++){const gamma=0.28;m=(1-gamma)*m+dt*F(x,a);x+=dt*m;steps.push({x,m});if(Math.abs(m)<0.03&&Math.abs(F(x,a))<0.05)break;}
+    return steps;
+  }
+  function result(steps,a){
+    const x=steps[steps.length-1].x,m=steps[steps.length-1].m;
+    const depth=centres.map((c,i)=>a[i]*Math.exp(-((x-c)**2)/(2*sigma*sigma)));
+    const tau=0.6+0.9*Math.abs(m)+0.25*(steps.length-1)/12;
+    const ex=depth.map(d=>Math.exp(d/tau)),Z=ex.reduce((u,v)=>u+v,0),pr=ex.map(e=>e/Z);
+    const best=pr.indexOf(Math.max(...pr));const conf=pr[best];
+    const dist=Math.min(...centres.map(c=>Math.abs(x-c)));
+    return {x,m,pr,best,conf,unbound:dist>0.7,abstain:conf<0.7,steps:steps.length-1};
+  }
+  function show(r){
+    $("ans").textContent=r.unbound?"nowhere":names[r.best];
+    $("bars").innerHTML=names.map((n,i)=>`<div class="bar"><span>${n}</span><div class="track"><div class="fill" style="width:${(r.pr[i]*100).toFixed(0)}%"></div></div><span class="n">${(r.pr[i]*100).toFixed(0)}%</span></div>`).join("");
+    $("conf").textContent=(r.conf*100).toFixed(0)+"%";
+    $("confd").textContent=`settled in ${r.steps} of 12 steps, speed left ${Math.abs(r.m).toFixed(2)}`;
+    $("flags").innerHTML=(r.abstain?'<span class="chip warn">abstain</span>':'<span class="chip good">confident</span>')+(r.unbound?'<span class="chip warn">unbound</span>':'<span class="chip good">in a valley</span>');
+  }
+  function reset(){const p=presets[cur];k=p.k;draw(p.a);place(p.x0,p.a);$("stepText").textContent="step 0 of 12";$("cap").textContent=p.cap;
+    $("ans").textContent="—";$("bars").innerHTML="";$("conf").textContent="—";$("confd").textContent="speed left, depth, steps used set the confidence";$("flags").textContent="—";$("arrow").setAttribute("opacity",0);
+    if(anim){cancelAnimationFrame(anim);anim=null;}$("run").disabled=false;}
+  function run(){
+    const p=presets[cur],a=p.a,steps=simulate(p),r=result(steps,a);
+    const reduce=window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    $("run").disabled=true;
+    if(reduce){place(r.x,a);$("stepText").textContent=`step ${r.steps} of 12`;show(r);$("run").disabled=false;return;}
+    let i=0,t0=null;const per=380;
+    function frame(t){
+      if(t0===null)t0=t;const el=t-t0;const s=Math.min(steps.length-1,Math.floor(el/per));const f=Math.min(1,(el-s*per)/per);
+      const x0=steps[s].x,x1=steps[Math.min(s+1,steps.length-1)].x;const x=x0+(x1-x0)*(1-Math.pow(1-f,2));
+      place(x,a);$("stepText").textContent=`step ${Math.min(s+1,steps.length-1)} of 12`;
+      const m=steps[Math.min(s+1,steps.length-1)].m;const al=$("arrowl");
+      al.setAttribute("x1",sx(x));al.setAttribute("y1",sy(U(x,a))-9);al.setAttribute("x2",sx(x)+m*40);al.setAttribute("y2",sy(U(x,a))-9);$("arrow").setAttribute("opacity",Math.abs(m)>0.05?1:0);
+      if(s<steps.length-1){anim=requestAnimationFrame(frame);}else{anim=null;$("arrow").setAttribute("opacity",0);show(r);$("run").disabled=false;}
+    }
+    anim=requestAnimationFrame(frame);
+  }
+  [0,1,2].forEach(i=>$("p"+i).addEventListener("click",()=>{cur=i;[0,1,2].forEach(j=>$("p"+j).classList.toggle("on",j===i));reset();}));
+  $("run").addEventListener("click",run);
+  $("tech").addEventListener("change",()=>{const tech=$("tech").checked;document.querySelectorAll("[data-plain]").forEach(el=>{el.textContent=tech?el.dataset.tech:el.dataset.plain;});});
+  reset();
+})();
+</script>
